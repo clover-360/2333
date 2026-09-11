@@ -34,14 +34,42 @@ CREATE TABLE IF NOT EXISTS `preferences` (
 -- ------------------------------------------------------------
 -- 3. 创建索引（若不存在）
 -- ------------------------------------------------------------
+-- 说明：MySQL 不支持 CREATE INDEX IF NOT EXISTS 语法，此处通过存储过程
+--       查询 information_schema 判断索引是否存在，实现幂等创建，可重复执行
+DROP PROCEDURE IF EXISTS `_ensure_index`;
+DELIMITER //
+CREATE PROCEDURE `_ensure_index`(
+    IN p_table  VARCHAR(64),
+    IN p_index  VARCHAR(64),
+    IN p_unique TINYINT,
+    IN p_cols   TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name   = p_table
+          AND index_name   = p_index
+    ) THEN
+        IF p_unique = 1 THEN
+            SET @sql = CONCAT('CREATE UNIQUE INDEX `', p_index, '` ON `', p_table, '` (', p_cols, ')');
+        ELSE
+            SET @sql = CONCAT('CREATE INDEX `', p_index, '` ON `', p_table, '` (', p_cols, ')');
+        END IF;
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END //
+DELIMITER ;
 
 -- 3.1 喜好名唯一索引：保证喜好名不重复，同时加速按喜好名查询
-CREATE UNIQUE INDEX IF NOT EXISTS `uk_preferences_name`
-    ON `preferences` (`name`);
+CALL `_ensure_index`('preferences', 'uk_preferences_name', 1, '`name`');
 
 -- 3.2 是否禁用普通索引：加速按启用状态筛选喜好的查询（如统计正常/禁用喜好数量）
-CREATE INDEX IF NOT EXISTS `idx_preferences_is_disabled`
-    ON `preferences` (`is_disabled`);
+CALL `_ensure_index`('preferences', 'idx_preferences_is_disabled', 0, '`is_disabled`');
+
+DROP PROCEDURE IF EXISTS `_ensure_index`;
 
 -- ------------------------------------------------------------
 -- 脚本执行完毕

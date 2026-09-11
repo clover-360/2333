@@ -41,17 +41,45 @@ CREATE TABLE IF NOT EXISTS `behavior_statistics` (
 --      又能加速"查询某用户某一天统计"的组合查询，避免重复数据写入；
 --   3) login_count、dialog_count 为统计结果数值，通常作为查询展示字段而非查询条件，无需单独建索引。
 
+-- 说明：MySQL 不支持 CREATE INDEX IF NOT EXISTS 语法，此处通过存储过程
+--       查询 information_schema 判断索引是否存在，实现幂等创建，可重复执行
+DROP PROCEDURE IF EXISTS `_ensure_index`;
+DELIMITER //
+CREATE PROCEDURE `_ensure_index`(
+    IN p_table  VARCHAR(64),
+    IN p_index  VARCHAR(64),
+    IN p_unique TINYINT,
+    IN p_cols   TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name   = p_table
+          AND index_name   = p_index
+    ) THEN
+        IF p_unique = 1 THEN
+            SET @sql = CONCAT('CREATE UNIQUE INDEX `', p_index, '` ON `', p_table, '` (', p_cols, ')');
+        ELSE
+            SET @sql = CONCAT('CREATE INDEX `', p_index, '` ON `', p_table, '` (', p_cols, ')');
+        END IF;
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END //
+DELIMITER ;
+
 -- 3.1 用户ID普通索引：加速按用户查询其历史行为统计的查询（如某用户近30天登录趋势）
-CREATE INDEX IF NOT EXISTS `idx_behavior_user_id`
-    ON `behavior_statistics` (`user_id`);
+CALL `_ensure_index`('behavior_statistics', 'idx_behavior_user_id', 0, '`user_id`');
 
 -- 3.2 统计日期普通索引：加速按日期范围查询全量用户统计的查询（如某天所有用户活跃情况）
-CREATE INDEX IF NOT EXISTS `idx_behavior_statistics_date`
-    ON `behavior_statistics` (`statistics_date`);
+CALL `_ensure_index`('behavior_statistics', 'idx_behavior_statistics_date', 0, '`statistics_date`');
 
 -- 3.3 用户ID + 统计日期唯一索引：保证同一用户同一天仅有一条统计记录，同时加速组合查询
-CREATE UNIQUE INDEX IF NOT EXISTS `uk_behavior_user_date`
-    ON `behavior_statistics` (`user_id`, `statistics_date`);
+CALL `_ensure_index`('behavior_statistics', 'uk_behavior_user_date', 1, '`user_id`, `statistics_date`');
+
+DROP PROCEDURE IF EXISTS `_ensure_index`;
 
 -- ------------------------------------------------------------
 -- 脚本执行完毕

@@ -37,22 +37,48 @@ CREATE TABLE IF NOT EXISTS `user` (
 -- ------------------------------------------------------------
 -- 3. 创建索引（若不存在）
 -- ------------------------------------------------------------
+-- 说明：MySQL 不支持 CREATE INDEX IF NOT EXISTS 语法，此处通过存储过程
+--       查询 information_schema 判断索引是否存在，实现幂等创建，可重复执行
+DROP PROCEDURE IF EXISTS `_ensure_index`;
+DELIMITER //
+CREATE PROCEDURE `_ensure_index`(
+    IN p_table  VARCHAR(64),
+    IN p_index  VARCHAR(64),
+    IN p_unique TINYINT,
+    IN p_cols   TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name   = p_table
+          AND index_name   = p_index
+    ) THEN
+        IF p_unique = 1 THEN
+            SET @sql = CONCAT('CREATE UNIQUE INDEX `', p_index, '` ON `', p_table, '` (', p_cols, ')');
+        ELSE
+            SET @sql = CONCAT('CREATE INDEX `', p_index, '` ON `', p_table, '` (', p_cols, ')');
+        END IF;
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END //
+DELIMITER ;
 
 -- 3.1 用户名唯一索引：保证用户名不重复，同时加速按用户名登录的查询
-CREATE UNIQUE INDEX IF NOT EXISTS `uk_user_username`
-    ON `user` (`username`);
+CALL `_ensure_index`('user', 'uk_user_username', 1, '`username`');
 
 -- 3.2 角色ID普通索引：加速按角色筛选用户的查询（如权限校验、角色人员列表）
-CREATE INDEX IF NOT EXISTS `idx_user_role_id`
-    ON `user` (`role_id`);
+CALL `_ensure_index`('user', 'idx_user_role_id', 0, '`role_id`');
 
 -- 3.3 是否禁用普通索引：加速按账号状态筛选用户的查询（如统计正常/禁用用户数）
-CREATE INDEX IF NOT EXISTS `idx_user_is_disabled`
-    ON `user` (`is_disabled`);
+CALL `_ensure_index`('user', 'idx_user_is_disabled', 0, '`is_disabled`');
 
 -- 3.4 复合索引：角色ID + 是否禁用，加速"查询某角色下所有正常用户"这类高频组合查询
-CREATE INDEX IF NOT EXISTS `idx_user_role_disabled`
-    ON `user` (`role_id`, `is_disabled`);
+CALL `_ensure_index`('user', 'idx_user_role_disabled', 0, '`role_id`, `is_disabled`');
+
+DROP PROCEDURE IF EXISTS `_ensure_index`;
 
 -- ------------------------------------------------------------
 -- 脚本执行完毕

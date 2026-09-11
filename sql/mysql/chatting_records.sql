@@ -46,17 +46,45 @@ CREATE TABLE IF NOT EXISTS `chatting_records` (
 --   5) create_time / update_time：时间字段，如后续出现"按时间范围查询对话"的高频需求，
 --      可再补充 (user_id, create_time) 复合索引，当前暂不预先建立，避免冗余索引。
 
+-- 说明：MySQL 不支持 CREATE INDEX IF NOT EXISTS 语法，此处通过存储过程
+--       查询 information_schema 判断索引是否存在，实现幂等创建，可重复执行
+DROP PROCEDURE IF EXISTS `_ensure_index`;
+DELIMITER //
+CREATE PROCEDURE `_ensure_index`(
+    IN p_table  VARCHAR(64),
+    IN p_index  VARCHAR(64),
+    IN p_unique TINYINT,
+    IN p_cols   TEXT
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name   = p_table
+          AND index_name   = p_index
+    ) THEN
+        IF p_unique = 1 THEN
+            SET @sql = CONCAT('CREATE UNIQUE INDEX `', p_index, '` ON `', p_table, '` (', p_cols, ')');
+        ELSE
+            SET @sql = CONCAT('CREATE INDEX `', p_index, '` ON `', p_table, '` (', p_cols, ')');
+        END IF;
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END //
+DELIMITER ;
+
 -- 3.1 用户ID普通索引：加速按用户查询其历史对话列表的查询
-CREATE INDEX IF NOT EXISTS `idx_chatting_user_id`
-    ON `chatting_records` (`user_id`);
+CALL `_ensure_index`('chatting_records', 'idx_chatting_user_id', 0, '`user_id`');
 
 -- 3.2 模型名称普通索引：加速按模型筛选对话或统计模型使用情况的查询
-CREATE INDEX IF NOT EXISTS `idx_chatting_model_name`
-    ON `chatting_records` (`model_name`);
+CALL `_ensure_index`('chatting_records', 'idx_chatting_model_name', 0, '`model_name`');
 
 -- 3.3 用户ID + 对话名称复合索引：加速"查询某用户下指定名称对话"的组合查询
-CREATE INDEX IF NOT EXISTS `idx_chatting_user_name`
-    ON `chatting_records` (`user_id`, `chatting_name`);
+CALL `_ensure_index`('chatting_records', 'idx_chatting_user_name', 0, '`user_id`, `chatting_name`');
+
+DROP PROCEDURE IF EXISTS `_ensure_index`;
 
 -- ------------------------------------------------------------
 -- 脚本执行完毕
