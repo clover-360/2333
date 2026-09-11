@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据统计 · 应用使用分析</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- ECharts CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+  <!-- 背景装饰 -->
+  <div class="decor" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+  <div class="dashboard">
+    <!-- 页头 -->
+    <header class="page-header">
+      <div class="header-title">
+        <span class="header-icon">📊</span>
+        <div>
+          <h1>应用使用数据统计</h1>
+          <p class="subtitle">用户在使用应用过程中的登录、对话与喜好选择行为分析</p>
+        </div>
+      </div>
+      <div class="header-meta">
+        <span class="date-range">📅 最近 30 天</span>
+      </div>
+    </header>
+    <!-- KPI 概览卡片 -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon" style="--kpi:#6366f1">👥</div>
+        <div class="kpi-info">
+          <span class="kpi-label">总使用次数</span>
+          <span class="kpi-value" id="kpiTotal">--</span>
+          <span class="kpi-trend up">▲ 12.5%</span>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="--kpi:#10b981">🔑</div>
+        <div class="kpi-info">
+          <span class="kpi-label">登录次数</span>
+          <span class="kpi-value" id="kpiLogin">--</span>
+          <span class="kpi-trend up">▲ 8.2%</span>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="--kpi:#f59e0b">💬</div>
+        <div class="kpi-info">
+          <span class="kpi-label">对话次数</span>
+          <span class="kpi-value" id="kpiChat">--</span>
+          <span class="kpi-trend up">▲ 15.3%</span>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="--kpi:#ec4899">🎯</div>
+        <div class="kpi-info">
+          <span class="kpi-label">喜好选择次数</span>
+          <span class="kpi-value" id="kpiHobby">--</span>
+          <span class="kpi-trend down">▼ 3.1%</span>
+        </div>
+      </div>
+    </section>
+    <!-- 图表区：上排 -->
+    <section class="chart-grid">
+      <!-- 功能使用次数对比 -->
+      <div class="chart-card chart-wide">
+        <div class="chart-title">
+          <h3>各功能使用次数对比</h3>
+          <span class="chart-badge">柱状图</span>
+        </div>
+        <div class="chart-box" id="chartUsage"></div>
+      </div>
+      <!-- 用户喜好分布 -->
+      <div class="chart-card">
+        <div class="chart-title">
+          <h3>用户喜好分布</h3>
+          <span class="chart-badge">环形图</span>
+        </div>
+        <div class="chart-box" id="chartHobby"></div>
+      </div>
+    </section>
+    <!-- 图表区：下排 -->
+    <section class="chart-grid">
+      <!-- 使用趋势 -->
+      <div class="chart-card chart-wide">
+        <div class="chart-title">
+          <h3>近 7 天使用趋势</h3>
+          <span class="chart-badge">折线图</span>
+        </div>
+        <div class="chart-box" id="chartTrend"></div>
+      </div>
+      <!-- 功能占比雷达 -->
+      <div class="chart-card">
+        <div class="chart-title">
+          <h3>功能使用雷达</h3>
+          <span class="chart-badge">雷达图</span>
+        </div>
+        <div class="chart-box" id="chartRadar"></div>
+      </div>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

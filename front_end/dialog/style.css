@@ -575,43 +575,22 @@ body {
   margin-top: 10px;
 }
 
-
-/* ============ 机器人思考动画 ============ */
+/* ============ 打字指示器 ============ */
 .loading-indicator {
   display: none;
-
-
-
-
-  padding: 12px 24px;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 22px;
+  color: var(--text-secondary);
 }
 
 .loading-indicator.visible {
-  display: block;
-  animation: messageIn 0.3s ease;
-}
-
-.thinking-row {
   display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.thinking-bubble {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--white);
-  border-radius: 16px;
-  border-top-left-radius: 4px;
-  padding: 14px 18px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .typing-dots {
   display: flex;
   gap: 4px;
-  align-items: center;
 }
 
 .typing-dots span {
@@ -633,8 +612,7 @@ body {
 @keyframes bounce {
   0%, 60%, 100% {
     transform: translateY(0);
-
-    opacity: 0.4;
+    opacity: 0.6;
   }
   30% {
     transform: translateY(-6px);
@@ -642,20 +620,8 @@ body {
   }
 }
 
-
-.thinking-text {
+.typing-text {
   font-size: 14px;
-  color: var(--text-secondary);
-  animation: blink 1.4s ease-in-out infinite;
-}
-
-@keyframes blink {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
 }
 
 /* ============ 响应式 ============ */

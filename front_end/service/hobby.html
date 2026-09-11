@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>选择你的喜好 · 发现同好</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 背景装饰 -->
+  <div class="decor" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- 主要卡片 -->
+  <main class="hobby-card">
+    <!-- 头部 -->
+    <header class="card-header">
+      <div class="header-icon">🎯</div>
+      <h1>选择你的喜好</h1>
+      <p class="subtitle">选出你感兴趣的兴趣爱好，帮助我们为你推荐志同道合的朋友</p>
+    </header>
+
+    <!-- 进度 -->
+    <div class="progress-wrapper">
+      <div class="progress-info">
+        <span>已选择 <strong id="count"></strong> / <strong>9</strong> 项</span>
+        <span class="progress-hint">至少选择 3 项</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- 喜好列表（Switch 开关） -->
+    <div class="hobby-list" id="hobbyGrid">
+      <label class="hobby-item" for="reading">
+        <span class="hobby-icon">📚</span>
+        <span class="hobby-name">阅读</span>
+        <input type="checkbox" id="reading" data-name="阅读" />
+        <span class="switch"></span>
+      </label>
+      <label class="hobby-item" for="music">
+        <span class="hobby-icon">🎵</span>
+        <span class="hobby-name">音乐</span>
+        <input type="checkbox" id="music" data-name="音乐" />
+        <span class="switch"></span>
+      </label>
+      <label class="hobby-item" for="gaming">
+        <span class="hobby-icon">🎮</span>
+        <span class="hobby-name">游戏</span>
+        <input type="checkbox" id="gaming" data-name="游戏" />
+        <span class="switch"></span>
+      </label>
+      <label class="hobby-item" for="movie">
+        <span class="hobby-icon">🎬</span>
+        <span class="hobby-name">影视</span>
+        <input type="checkbox" id="movie" data-name="影视" />
+        <span class="switch"></span>
+      </label>
+      <label class="hobby-item" for="sports">
+        <span class="hobby-icon">🏀</span>
+        <span class="hobby-name">运动</span>
+        <input type="checkbox" id="sports" data-name="运动" />
+        <span class="switch"></span>
+      </label>
+      <label class="hobby-item" for="travel">
+        <span class="hobby-icon">✈️</span>
+        <span class="hobby-name">旅行</span>
+        <input type="checkbox" id="travel" data-name="旅行" />
+        <span class="switch"></span>
+      </label>
+      <label class="hobby-item" for="cooking">
+        <span class="hobby-icon">🍳</span>
+        <span class="hobby-name">烹饪</span>
+        <input type="checkbox" id="cooking" data-name="烹饪" />
+        <span class="switch"></span>
+      </label>
+      <label class="hobby-item" for="painting">
+        <span class="hobby-icon">🎨</span>
+        <span class="hobby-name">绘画</span>
+        <input type="checkbox" id="painting" data-name="绘画" />
+        <span class="switch"></span>
+      </label>
+      <label class="hobby-item" for="tech">
+        <span class="hobby-icon">💻</span>
+        <span class="hobby-name">科技</span>
+        <input type="checkbox" id="tech" data-name="科技" />
+        <span class="switch"></span>
+      </label>
+    </div>
+
+    <!-- 底部 -->
+    <footer class="card-footer">
+      <button class="submit-btn" id="submitBtn" disabled>下一步</button>
+      <p class="footer-tip">可以多选，之后随时可以更改</p>
+    </footer>
+  </main>
+
+  <!-- 成功提示 -->
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
