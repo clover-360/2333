@@ -257,5 +257,6 @@ def internal_error(e):
 # 启动入口
 # ============================================================
 if __name__ == "__main__":
-    # debug=True 仅用于本地开发，生产环境请关闭并使用 WSGI 容器（如 gunicorn）
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    host = '0.0.0.0'   # 监听所有可用的网络接口
+    port = 6008        # 设置端口号
+    app.run(host=host, port=port)
