@@ -2,7 +2,7 @@
 """
 Flask 后端服务
 ================
-提供用户登录接口（含完整校验逻辑）及辅助接口（注册、健康检查）。
+提供用户注册、登录接口（含完整校验逻辑）及健康检查接口。
 
 依赖：Flask、Flask-MySQLdb、Werkzeug
 数据表：见 sql/mysql/user.sql
@@ -142,7 +142,7 @@ def health():
 
 
 # ============================================================
-# 接口：用户注册（辅助测试用，生产环境应移除或加权限）
+# 接口：用户注册
 # ============================================================
 @app.route("/register", methods=["POST"])
 @require_json_fields("username", "password")
@@ -150,36 +150,60 @@ def register():
     body = g.body
     username = body["username"].strip()
     password = body["password"]
+    confirm_password = body.get("confirm_password")   # 可选：确认密码
+    avatar = body.get("avatar")                        # 可选：头像路径
+    preference = body.get("preference")               # 可选：用户喜好（JSON 字符串）
 
-    # 格式校验
+    # ---- 校验 1：用户名格式 ----
     valid, msg = validate_username(username)
     if not valid:
         return fail(4101, msg)
+
+    # ---- 校验 2：密码格式 ----
     valid, msg = validate_password(password)
     if not valid:
         return fail(4102, msg)
 
-    # 密码加密（使用 pbkdf2:sha256，哈希长度可控，适配 user.password VARCHAR(128)）
-    password_hash = generate_password_hash(password, method="pbkdf2:sha256", salt_length=16)
+    # ---- 校验 3：两次密码一致（传入 confirm_password 时校验）----
+    if confirm_password is not None and confirm_password != password:
+        return fail(4103, "两次输入的密码不一致")
 
-    # 写入数据库（参数化查询，防 SQL 注入）
+    # ---- 校验 4：头像字段长度（user.avatar VARCHAR(255)）----
+    if avatar is not None and len(avatar) > 255:
+        return fail(4104, "头像路径长度不能超过 255 个字符")
+
+    # ---- 校验 5：喜好字段长度（user.preference VARCHAR(512)）----
+    if preference is not None and len(preference) > 512:
+        return fail(4105, "喜好字段长度不能超过 512 个字符")
+
+    # ---- 校验 6：用户名是否已存在（先查重，给出明确提示）----
     cur = mysql.connection.cursor()
     try:
         cur.execute(
-            "INSERT INTO user (username, password) VALUES (%s, %s)",
-            (username, password_hash),
+            "SELECT id FROM user WHERE username = %s LIMIT 1",
+            (username,),
+        )
+        if cur.fetchone():
+            return fail(4201, "用户名已存在")
+
+        # 密码加密（pbkdf2:sha256，哈希长度可控，适配 user.password VARCHAR(128)）
+        password_hash = generate_password_hash(password, method="pbkdf2:sha256", salt_length=16)
+
+        # 写入数据库（参数化查询防注入；role_id、is_disabled 使用表默认值 0）
+        cur.execute(
+            "INSERT INTO user (avatar, username, password, preference) "
+            "VALUES (%s, %s, %s, %s)",
+            (avatar, username, password_hash, preference),
         )
         mysql.connection.commit()
+        new_user_id = cur.lastrowid
     except Exception as e:
         mysql.connection.rollback()
-        # 唯一键冲突
-        if "Duplicate" in str(e):
-            return fail(4201, "用户名已存在")
         return fail(5001, f"注册失败：{str(e)}", 500)
     finally:
         cur.close()
 
-    return ok(msg="注册成功")
+    return ok({"user_id": new_user_id, "username": username}, msg="注册成功")
 
 
 # ============================================================
