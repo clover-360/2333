@@ -12,7 +12,7 @@ import time
 from functools import wraps
 from collections import defaultdict
 from flask import Flask, request, jsonify, g
-from flask_mysqldb import MySQL
+from flask_mysql_connector import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # ============================================================
