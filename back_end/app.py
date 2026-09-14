@@ -25,6 +25,7 @@ class Config:
     MYSQL_USER = "root"
     MYSQL_PASSWORD = "123456"
     MYSQL_DB = "AIcode"
+    MYSQL_DATABASE = "AIcode"
     MYSQL_CHARSET = "utf8mb4"
 
     MYSQL_CHARSET = "utf8mb4"
