@@ -4,17 +4,14 @@ Flask 后端服务
 ================
 提供用户注册、登录接口（含完整校验逻辑）及健康检查接口。
 
-依赖：Flask、Flask-MySQLdb、Werkzeug
+依赖:Flask、Flask-MySQLdb、Werkzeug
 数据表：见 sql/mysql/user.sql
 """
 
 import time
 from functools import wraps
 from collections import defaultdict
-
 from flask import Flask, request, jsonify, g
-import pymysql
-pymysql.install_as_MySQLdb()
 from flask_mysqldb import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
 
