@@ -14,6 +14,7 @@ from collections import defaultdict
 from flask import Flask, request, jsonify, g
 from flask_mysql_connector import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 # ============================================================
 # 应用配置
@@ -41,6 +42,9 @@ class Config:
     PASSWORD_MIN_LEN = 6
     PASSWORD_MAX_LEN = 32
 
+    # Token 配置（基于 itsdangerous 签发带过期时间的签名 token，自包含 user_id）
+    TOKEN_EXPIRE_SECONDS = 86400      # token 有效期：24 小时
+
 
 # ============================================================
 # Flask 应用与 MySQL 初始化
@@ -49,6 +53,37 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 mysql = MySQL(app)
+
+
+# ============================================================
+# Token 签发与校验（基于 itsdangerous，自包含 user_id，无需额外存储）
+# ============================================================
+_token_serializer = URLSafeTimedSerializer(Config.SECRET_KEY, salt="login-token")
+
+
+def generate_token(user_id):
+    """为指定用户签发 token（自包含 user_id，带过期时间）"""
+    return _token_serializer.dumps({"user_id": user_id})
+
+
+def verify_token(token):
+    """校验 token，返回 user_id；失败返回 None"""
+    try:
+        data = _token_serializer.loads(token, max_age=Config.TOKEN_EXPIRE_SECONDS)
+        return data.get("user_id")
+    except (BadSignature, SignatureExpired):
+        return None
+
+
+# ============================================================
+# 跨域支持（前端跨端口调用需开启 CORS）
+# ============================================================
+@app.after_request
+def _add_cors_headers(resp):
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return resp
 
 
 # ============================================================
@@ -269,11 +304,41 @@ def login():
     # ---- 登录成功：重置失败计数 ----
     _reset_fail(client_ip)
 
-    # 返回用户基本信息（生产环境可改为签发 JWT token）
+    # 签发 token（自包含 user_id，带过期时间；前端存 localStorage，后续请求在 header 带上）
+    token = generate_token(user_id)
+
     return ok({
+        "token": token,
         "user_id": user_id,
         "username": db_username,
     }, msg="登录成功")
+
+
+# ============================================================
+# 接口：获取当前登录用户信息（演示 token 校验，需在 header 带上 token）
+# ============================================================
+@app.route("/me", methods=["GET"])
+def me():
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return fail(4501, "未提供有效的认证 token", 401)
+    user_id = verify_token(auth[len("Bearer "):])
+    if user_id is None:
+        return fail(4502, "token 无效或已过期", 401)
+
+    cur = mysql.connection.cursor()
+    try:
+        cur.execute(
+            "SELECT id, username, avatar FROM user WHERE id = %s LIMIT 1",
+            (user_id,),
+        )
+        row = cur.fetchone()
+    finally:
+        cur.close()
+    if not row:
+        return fail(4503, "用户不存在", 404)
+
+    return ok({"user_id": row[0], "username": row[1], "avatar": row[2]}, msg="ok")
 
 
 # ============================================================
