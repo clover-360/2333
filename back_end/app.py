@@ -139,6 +139,10 @@ def validate_password(password):
 # ============================================================
 # 接口：健康检查
 # ============================================================
+@app.route("/")
+def hello_world():
+    return "Hello, World!"
+
 @app.route("/health", methods=["GET"])
 def health():
     return ok(msg="服务运行中")
