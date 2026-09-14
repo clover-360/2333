@@ -24,9 +24,12 @@ class Config:
     MYSQL_HOST = "localhost"
     MYSQL_PORT = 3306
     MYSQL_USER = "root"
-    MYSQL_PASSWORD = "root"
+    MYSQL_PASSWORD = "123456"
     MYSQL_DB = "AIcode"
     MYSQL_CHARSET = "utf8mb4"
+
+    MYSQL_CHARSET = "utf8mb4"
+    SECRET_KEY = "liicM5fJzdQ8oLkAgDnHmAQYikbFRXfj"
 
     # 登录防暴力破解配置
     LOGIN_MAX_FAIL_TIMES = 5        # 同一 IP 最大连续失败次数
