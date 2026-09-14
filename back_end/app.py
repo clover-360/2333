@@ -13,6 +13,8 @@ from functools import wraps
 from collections import defaultdict
 
 from flask import Flask, request, jsonify, g
+import pymysql
+pymysql.install_as_MySQLdb()
 from flask_mysqldb import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
 
