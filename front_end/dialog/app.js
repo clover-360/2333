@@ -1,4 +1,4 @@
-/* AI Chat 前端交互逻辑（演示版） */
+/* AI Chat 前端交互逻辑（接入星火大模型 spark_chat WebSocket 接口） */
 
 // ============ DOM 元素 ============
 const $ = (id) => document.getElementById(id);
@@ -18,13 +18,12 @@ let currentSessionId = null;
 let sessions = {};
 let isGenerating = false;
 
-// ============ 演示 AI 回复库 ============
-const demoReplies = [
-  '这是一个很好的问题！从我的角度来看，可以从以下几个方面来思考：首先，明确目标非常关键，它会帮助我们把复杂的问题拆解成一个个可执行的小步骤。其次，持续迭代和反馈能让我们不断优化方案。最后，保持学习和开放的心态同样重要。',
-  '好的，我理解你想了解的内容。简单来说，我们可以把它类比成日常生活中的一个场景。当你掌握了核心逻辑之后，剩下的就是不断练习和验证。如果你有更具体的需求，欢迎继续补充细节，我可以为你提供更针对性的建议。',
-  '针对你的问题，我建议先从基础概念入手打好地基，再逐步深入到复杂场景。实际应用中，做好数据整理和边界情况处理会避免很多坑。另外，可以参考一些优秀的开源实践来提升效率。需要我展开讲讲某个具体环节吗？',
-  '这是个值得深入探讨的话题。结合你提到的背景，我的建议是分三步走：第一步收集信息，第二步制定方案，第三步执行并复盘。每一步都可以再细化出相应的检查点。如果你告诉我更具体的约束条件，我可以帮你整理成一个可操作的计划清单。',
-];
+// ============ 接口配置 ============
+// 后端服务地址（Flask 监听 0.0.0.0:6008）
+const API_BASE = 'http://localhost:6008';
+
+// WebSocket 连接（socket.io，用于星火大模型 spark_chat 事件）
+const socket = io(API_BASE, { transports: ['websocket'] });
 
 // ============ 工具函数 ============
 function escapeHtml(text) {
@@ -118,7 +117,11 @@ function createMessageEl(msg) {
 
   const content = document.createElement('div');
   content.className = 'message-content';
-  content.innerHTML = formatMessage(msg.content);
+
+  const text = document.createElement('div');
+  text.className = 'message-text';
+  text.innerHTML = formatMessage(msg.content);
+  content.appendChild(text);
 
   const copyBtn = document.createElement('button');
   copyBtn.className = 'copy-btn';
@@ -189,23 +192,66 @@ function sendMessage(text) {
   generateReply(session);
 }
 
-// ============ 生成回复（演示）============
+// ============ 生成回复（通过 WebSocket spark_chat 事件获取）============
 function generateReply(session) {
   isGenerating = true;
   sendBtn.disabled = true;
   loadingIndicator.classList.add('visible');
   scrollToBottom();
 
-  const delay = 800 + Math.random() * 1200;
-  setTimeout(() => {
-    const reply = demoReplies[Math.floor(Math.random() * demoReplies.length)];
-    session.messages.push({ role: 'assistant', content: reply });
+  // 构造发给星火的消息列表（当前会话全部消息，保持上下文）
+  const messages = session.messages.map((m) => ({ role: m.role, content: m.content }));
+
+  // 预先创建空的助手消息气泡，逐 chunk 填充
+  const assistantMsg = { role: 'assistant', content: '' };
+  session.messages.push(assistantMsg);
+  renderMessages(currentSessionId);
+  const lastRow = messagesContainer.lastElementChild;
+  const textEl = lastRow ? lastRow.querySelector('.message-text') : null;
+
+  // 解析星火 SSE 行（形如 data: {...}），提取 delta.content 追加显示
+  const onChunk = (line) => {
+    const trimmed = (line || '').trim();
+    if (!trimmed.startsWith('data:')) return;
+    const data = trimmed.slice(5).trim();
+    if (data === '[DONE]') return;
+    try {
+      const json = JSON.parse(data);
+      const delta = json.choices && json.choices[0] && json.choices[0].delta;
+      if (delta && delta.content) {
+        assistantMsg.content += delta.content;
+        if (textEl) textEl.innerHTML = formatMessage(assistantMsg.content);
+        scrollToBottom();
+      }
+    } catch (e) {
+      // 非 JSON 片段，忽略
+    }
+  };
+
+  const cleanup = () => {
+    socket.off('chat_chunk', onChunk);
+    socket.off('chat_done', onDone);
+    socket.off('chat_error', onError);
     isGenerating = false;
     loadingIndicator.classList.remove('visible');
-    renderMessages(currentSessionId);
     sendBtn.disabled = !promptInput.value.trim().length;
     renderConversations();
-  }, delay);
+  };
+
+  const onDone = () => { cleanup(); };
+  const onError = (err) => {
+    assistantMsg.content = assistantMsg.content || ('（请求失败：' + (err && err.msg ? err.msg : '未知错误') + '）');
+    if (textEl) textEl.innerHTML = formatMessage(assistantMsg.content);
+    cleanup();
+  };
+
+  // 监听后端回推事件
+  socket.on('chat_chunk', onChunk);
+  socket.on('chat_done', onDone);
+  socket.on('chat_error', onError);
+
+  // 发起 WebSocket 请求（事件名 spark_chat）
+  socket.emit('spark_chat', { messages });
 }
 
 // ============ 事件绑定 ============

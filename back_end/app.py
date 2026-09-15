@@ -8,11 +8,15 @@ Flask 后端服务
 数据表：见 sql/mysql/user.sql
 """
 
+import json
 import time
+from flask_cors import CORS
+import requests
 from functools import wraps
 from collections import defaultdict
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, Response, stream_with_context
 from flask_mysql_connector import MySQL
+from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
@@ -45,14 +49,24 @@ class Config:
     # Token 配置（基于 itsdangerous 签发带过期时间的签名 token，自包含 user_id）
     TOKEN_EXPIRE_SECONDS = 86400      # token 有效期：24 小时
 
+    # 星火大模型配置（详见 back_end/resource/星火大模型api文档.md）
+    SPARK_API_URL = "https://spark-api-open.xf-yun.com/v1/chat/completions"
+    SPARK_API_PASSWORD = "HvHgMQsoacUJBLETrAZG:PDSjOvtqzmHLFnITTNmO"  # 替换为你在星火平台申请的 API Password
+    SPARK_DEFAULT_MODEL = "generalv3.5"
+    SPARK_TIMEOUT = 60                # 调用星火接口的超时时间（秒）
+
 
 # ============================================================
 # Flask 应用与 MySQL 初始化
 # ============================================================
 app = Flask(__name__)
+CORS(app)  # 允许跨域请求（开发环境可用，生产环境请按需配置）
 app.config.from_object(Config)
 
 mysql = MySQL(app)
+
+# WebSocket 支持（flask-socketio，cors_allowed_origins=* 允许前端跨域连接）
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 # ============================================================
@@ -341,6 +355,97 @@ def me():
 
 
 # ============================================================
+# 星火大模型接口
+# ============================================================
+def _build_spark_payload(body):
+    """构造星火请求 payload，返回 (payload, error_msg)"""
+    messages = body.get("messages")
+    if not messages or not isinstance(messages, list):
+        return None, "messages 字段缺失或格式错误（应为数组）"
+    payload = {
+        "model": body.get("model") or Config.SPARK_DEFAULT_MODEL,
+        "messages": messages,
+        "stream": True,
+    }
+    if "temperature" in body:
+        payload["temperature"] = body["temperature"]
+    if "max_tokens" in body:
+        payload["max_tokens"] = body["max_tokens"]
+    return payload, None
+
+
+def _spark_headers():
+    """星火接口请求头"""
+    return {
+        "Authorization": f"Bearer {Config.SPARK_API_PASSWORD}",
+        "Content-Type": "application/json",
+    }
+
+
+# ------------------------------------------------------------
+# 方式一：SSE 流式接口（POST /spark/chat/stream）
+# 前端用 fetch 读取流；响应 mimetype 为 text/event-stream，
+# 逐行转发星火返回的 data: {...} 片段，适合聊天逐字显示。
+# ------------------------------------------------------------
+@app.route("/spark/chat/stream", methods=["POST"])
+def chat_stream():
+    body = request.get_json(silent=True) or {}
+    payload, err = _build_spark_payload(body)
+    if err:
+        return fail(4601, err)
+
+    def generate():
+        try:
+            resp = requests.post(
+                Config.SPARK_API_URL,
+                headers=_spark_headers(),
+                json=payload,
+                stream=True,
+                timeout=Config.SPARK_TIMEOUT,
+            )
+            # 逐行转发星火的 SSE 流（每行形如 data: {...}）
+            for line in resp.iter_lines(decode_unicode=True):
+                if line:
+                    yield line + "\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+
+# ------------------------------------------------------------
+# 方式二：WebSocket 接口（事件名 spark_chat）
+# 前端建立 WebSocket 连接后 emit("spark_chat", {...})；
+# 后端逐 chunk emit("chat_chunk", line) 回推，结束时 emit("chat_done")，
+# 异常时 emit("chat_error", {...})。适合双向交互场景。
+# ------------------------------------------------------------
+@socketio.on("spark_chat")
+def handle_chat(data):
+    if not isinstance(data, dict):
+        emit("chat_error", {"msg": "请求数据格式错误"})
+        return
+    payload, err = _build_spark_payload(data)
+    if err:
+        emit("chat_error", {"msg": err})
+        return
+
+    try:
+        resp = requests.post(
+            Config.SPARK_API_URL,
+            headers=_spark_headers(),
+            json=payload,
+            stream=True,
+            timeout=Config.SPARK_TIMEOUT,
+        )
+        for line in resp.iter_lines(decode_unicode=True):
+            if line:
+                emit("chat_chunk", line)
+        emit("chat_done")
+    except Exception as e:
+        emit("chat_error", {"msg": str(e)})
+
+
+# ============================================================
 # 全局异常处理
 # ============================================================
 @app.errorhandler(500)
@@ -354,4 +459,5 @@ def internal_error(e):
 if __name__ == "__main__":
     host = '0.0.0.0'   # 监听所有可用的网络接口
     port = 6008        # 设置端口号
-    app.run(host=host, port=port)
+    # 使用 socketio.run 以支持 WebSocket（开发模式；生产环境建议 gunicorn + eventlet）
+    socketio.run(app, host=host, port=port, allow_unsafe_werkzeug=True)

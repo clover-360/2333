@@ -1,5 +1,4 @@
 // ============ 接口配置 ============
-// 后端服务地址（通过 Nginx 的 /api 前缀代理到 Flask 6008 端口）
 const API_BASE = '/api';
 
 // ============ DOM 元素获取 ============
@@ -15,11 +14,7 @@ let toastTimer = null;
 function showToast(message, type = 'error') {
   toast.textContent = message;
   toast.className = 'toast show ' + (type === 'success' ? 'success' : 'error');
-
-  if (toastTimer) {
-    clearTimeout(toastTimer);
-  }
-
+  if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toast.classList.remove('show');
   }, 3000);
@@ -36,27 +31,13 @@ function clearError(input, errorElement) {
   errorElement.textContent = '';
 }
 
-/**
- * 用户名校验：
- *   - 长度 3~64
- *   - 允许中文、字母、数字、下划线、横线
- */
 function isValidUsername(username) {
-  if (username.length < 3 || username.length > 64) {
-    return false;
-  }
+  if (username.length < 3 || username.length > 64) return false;
   return /^[\u4e00-\u9fa5A-Za-z0-9_-]+$/.test(username);
 }
 
-/**
- * 密码校验：
- *   - 长度 6~32
- *   - 必须同时包含英文字母和数字
- */
 function isPasswordValid(password) {
-  if (password.length < 6 || password.length > 32) {
-    return false;
-  }
+  if (password.length < 6 || password.length > 32) return false;
   const hasEnglish = /[a-zA-Z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
   return hasEnglish && hasNumber;
@@ -67,11 +48,9 @@ function validateForm() {
   let isValid = true;
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
-
   const usernameError = document.getElementById('usernameError');
   const passwordError = document.getElementById('passwordError');
 
-  // 校验用户名
   if (!username) {
     setError(usernameInput, usernameError, '请输入用户名');
     isValid = false;
@@ -82,20 +61,11 @@ function validateForm() {
     clearError(usernameInput, usernameError);
   }
 
-  // 校验密码
   if (!password) {
     setError(passwordInput, passwordError, '请输入密码');
     isValid = false;
   } else if (!isPasswordValid(password)) {
-    setError(
-      passwordInput,
-      passwordError,
-      password.length < 6
-        ? '密码长度不能少于6位'
-        : password.length > 32
-          ? '密码长度不能超过32位'
-          : '密码必须同时包含英文字母和数字'
-    );
+    setError(passwordInput, passwordError, '密码需 6~32 位且同时包含字母和数字');
     isValid = false;
   } else {
     clearError(passwordInput, passwordError);
@@ -107,25 +77,19 @@ function validateForm() {
 // ============ 实时清除错误提示 ============
 usernameInput.addEventListener('input', () => {
   const usernameError = document.getElementById('usernameError');
-  if (usernameInput.classList.contains('error')) {
-    clearError(usernameInput, usernameError);
-  }
+  if (usernameInput.classList.contains('error')) clearError(usernameInput, usernameError);
 });
 
 passwordInput.addEventListener('input', () => {
   const passwordError = document.getElementById('passwordError');
-  if (passwordInput.classList.contains('error')) {
-    clearError(passwordInput, passwordError);
-  }
+  if (passwordInput.classList.contains('error')) clearError(passwordInput, passwordError);
 });
 
 // ============ 带 token 的请求工具 ============
 function authFetch(url, options = {}) {
   const token = localStorage.getItem('token');
   const headers = Object.assign({}, options.headers || {});
-  if (token) {
-    headers['Authorization'] = 'Bearer ' + token;
-  }
+  if (token) headers['Authorization'] = 'Bearer ' + token;
   if (options.body && typeof options.body === 'object') {
     headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(options.body);
@@ -133,18 +97,13 @@ function authFetch(url, options = {}) {
   return fetch(API_BASE + url, Object.assign({}, options, { headers }));
 }
 
-// ============ 表单提交处理（调用后端 /login 接口）============
+// ============ 表单提交处理 ============
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-
-  // 执行表单校验
-  if (!validateForm()) {
-    return;
-  }
+  if (!validateForm()) return;
 
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
-
   submitBtn.disabled = true;
   submitBtn.textContent = '登录中...';
 
@@ -156,19 +115,14 @@ loginForm.addEventListener('submit', async (event) => {
     });
     const result = await resp.json();
 
-    // 后端统一响应：{ code, msg, data }
     if (result.code === 0 && result.data && result.data.token) {
       localStorage.setItem('token', result.data.token);
       localStorage.setItem('user_info', JSON.stringify({
         user_id: result.data.user_id,
         username: result.data.username,
       }));
-
       showToast('登录成功！欢迎回来 🌟', 'success');
-
-      setTimeout(() => {
-        window.location.href = '../index.html';
-      }, 800);
+      setTimeout(() => { window.location.href = '/dialog/chat-stream.html'; }, 800);
     } else {
       showToast(result.msg || '登录失败，请重试');
       passwordInput.value = '';
