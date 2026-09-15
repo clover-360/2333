@@ -60,7 +60,6 @@ mysql = MySQL(app)
 # ============================================================
 _token_serializer = URLSafeTimedSerializer(Config.SECRET_KEY, salt="login-token")
 
-
 def generate_token(user_id):
     """为指定用户签发 token（自包含 user_id，带过期时间）"""
     return _token_serializer.dumps({"user_id": user_id})
