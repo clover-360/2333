@@ -1,5 +1,5 @@
 // ============ 接口配置 ============
-// 后端服务地址（Flask 监听 0.0.0.0:6008）
+// 后端服务地址（通过 Nginx 的 /api 前缀代理到 Flask 6008 端口）
 const API_BASE = '/api';
 
 // ============ DOM 元素获取 ============
@@ -37,19 +37,19 @@ function clearError(input, errorElement) {
 }
 
 /**
- * 用户名校验（与后端 app.py validate_username 对齐）：
+ * 用户名校验：
  *   - 长度 3~64
- *   - 仅允许字母、数字、下划线、横线
+ *   - 允许中文、字母、数字、下划线、横线
  */
 function isValidUsername(username) {
   if (username.length < 3 || username.length > 64) {
     return false;
   }
-  return /^[A-Za-z0-9_-]+$/.test(username);
+  return /^[\u4e00-\u9fa5A-Za-z0-9_-]+$/.test(username);
 }
 
 /**
- * 密码校验（与后端 app.py validate_password 对齐，并额外要求含字母和数字）：
+ * 密码校验：
  *   - 长度 6~32
  *   - 必须同时包含英文字母和数字
  */
@@ -76,7 +76,7 @@ function validateForm() {
     setError(usernameInput, usernameError, '请输入用户名');
     isValid = false;
   } else if (!isValidUsername(username)) {
-    setError(usernameInput, usernameError, '用户名需 3~64 位，仅含字母、数字、下划线、横线');
+    setError(usernameInput, usernameError, '用户名需 3~64 位，仅含中文、字母、数字、下划线、横线');
     isValid = false;
   } else {
     clearError(usernameInput, usernameError);
@@ -119,13 +119,7 @@ passwordInput.addEventListener('input', () => {
   }
 });
 
-// ============ 带 token 的请求工具（供后续接口使用，自动在 header 带上 token）============
-/**
- * 发起带认证的请求：自动从 localStorage 读取 token 并放入 Authorization header
- * @param {string} url - 接口路径（相对 API_BASE，如 '/me'）
- * @param {object} [options] - fetch 配置；若 body 为对象则自动 JSON 序列化
- * @returns {Promise<Response>}
- */
+// ============ 带 token 的请求工具 ============
 function authFetch(url, options = {}) {
   const token = localStorage.getItem('token');
   const headers = Object.assign({}, options.headers || {});
@@ -164,9 +158,7 @@ loginForm.addEventListener('submit', async (event) => {
 
     // 后端统一响应：{ code, msg, data }
     if (result.code === 0 && result.data && result.data.token) {
-      // 登录成功：把 token 存入 localStorage，供后续接口在 header 带上
       localStorage.setItem('token', result.data.token);
-      // 同时缓存用户基本信息，便于页面展示
       localStorage.setItem('user_info', JSON.stringify({
         user_id: result.data.user_id,
         username: result.data.username,
@@ -174,12 +166,10 @@ loginForm.addEventListener('submit', async (event) => {
 
       showToast('登录成功！欢迎回来 🌟', 'success');
 
-      // 登录成功后跳转（按需修改目标页地址）
       setTimeout(() => {
         window.location.href = '../index.html';
       }, 800);
     } else {
-      // 登录失败：展示后端返回的错误信息
       showToast(result.msg || '登录失败，请重试');
       passwordInput.value = '';
       passwordInput.focus();
