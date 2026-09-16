@@ -2,28 +2,52 @@
 """
 Flask 后端服务
 ================
-提供用户注册、登录接口（含完整校验逻辑）及健康检查接口。
+本模块为 AIcode 项目的后端服务，基于 Flask 提供 用户认证 与 星火大模型对话 能力。
 
-依赖:Flask、Flask-MySQLdb、Werkzeug
+功能概览
+--------
+1. 用户注册：POST /register
+2. 用户登录：POST /login（含防暴力破解、账号禁用校验，签发 token）
+3. 当前用户信息：GET /me（需在 Header 携带 token）
+4. 星火大模型对话（流式）：POST /spark/chat/stream（SSE，逐字返回）
+5. 星火大模型对话（WebSocket）：事件 spark_chat（逐 chunk 回推 chat_chunk/chat_done/chat_error）
+6. 健康检查：GET /health
+
+技术依赖
+--------
+- Flask：Web 框架
+- flask_mysql_connector：MySQL 连接
+- flask_socketio：WebSocket 支持
+- flask_cors：跨域
+- werkzeug：密码哈希（pbkdf2:sha256）
+- itsdangerous：token 签发与校验
+- requests：调用星火大模型 HTTP 接口
+
 数据表：见 sql/mysql/user.sql
+启动：python app.py（默认监听 0.0.0.0:6008）
 """
 
-import json
-import time
-from flask_cors import CORS
-import requests
-from functools import wraps
-from collections import defaultdict
-from flask import Flask, request, jsonify, g, Response, stream_with_context
-from flask_mysql_connector import MySQL
-from flask_socketio import SocketIO, emit
-from werkzeug.security import generate_password_hash, check_password_hash
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+# 标准库
+import json                            # JSON 编解码（流式错误信息序列化）
+import time                            # 时间戳（登录失败锁定计时）
+from functools import wraps            # 装饰器工具（保留被装饰函数元信息）
+from collections import defaultdict    # 默认字典（登录失败计数存储）
+
+# 第三方库
+import requests                        # HTTP 客户端（调用星火大模型接口）
+from flask import Flask, request, jsonify, g, Response, stream_with_context  # Flask 核心与流式响应
+from flask_cors import CORS            # 跨域支持
+from flask_mysql_connector import MySQL  # MySQL 连接扩展
+from flask_socketio import SocketIO, emit  # WebSocket 支持
+from werkzeug.security import generate_password_hash, check_password_hash  # 密码加密与校验
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired  # 签名 token
 
 # ============================================================
 # 应用配置
 # ============================================================
 class Config:
+    """应用配置集中管理：数据库、安全、登录策略、Token、星火大模型等。"""
+
     # MySQL 数据库连接配置（请按实际环境修改）
     MYSQL_HOST = "localhost"
     MYSQL_PORT = 3306
@@ -189,10 +213,12 @@ def validate_password(password):
 # ============================================================
 @app.route("/")
 def hello_world():
+    """根路径，用于确认服务是否启动。"""
     return "Hello, World!"
 
 @app.route("/health", methods=["GET"])
 def health():
+    """健康检查接口，返回服务运行状态。"""
     return ok(msg="服务运行中")
 
 
@@ -202,6 +228,12 @@ def health():
 @app.route("/register", methods=["POST"])
 @require_json_fields("username", "password")
 def register():
+    """
+    用户注册接口 POST /register
+    必填：username、password；可选：confirm_password、avatar、preference
+    校验：用户名/密码格式、两次密码一致、字段长度、用户名查重
+    成功返回：{user_id, username}；密码以 pbkdf2:sha256 哈希存储
+    """
     body = g.body
     username = body["username"].strip()
     password = body["password"]
@@ -267,6 +299,13 @@ def register():
 @app.route("/login", methods=["POST"])
 @require_json_fields("username", "password")
 def login():
+    """
+    用户登录接口 POST /login
+    必填：username、password
+    校验顺序：IP 锁定 → 用户名格式 → 密码格式 → 用户存在 → 账号禁用 → 密码正确
+    成功返回：{token, user_id, username}；token 自包含 user_id，有效期 24 小时
+    防暴力破解：同一 IP 连续失败 5 次锁定 300 秒
+    """
     body = g.body
     username = body["username"].strip()
     password = body["password"]
@@ -332,6 +371,11 @@ def login():
 # ============================================================
 @app.route("/me", methods=["GET"])
 def me():
+    """
+    获取当前登录用户信息 GET /me
+    需在请求头携带：Authorization: Bearer <token>
+    成功返回：{user_id, username, avatar}
+    """
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return fail(4501, "未提供有效的认证 token", 401)
@@ -389,6 +433,12 @@ def _spark_headers():
 # ------------------------------------------------------------
 @app.route("/spark/chat/stream", methods=["POST"])
 def chat_stream():
+    """
+    星火大模型流式对话接口 POST /spark/chat/stream
+    请求体：{messages: [{role, content}], model?, temperature?, max_tokens?}
+    响应：text/event-stream，逐行转发星火返回的 data: {...} 片段，以 data: [DONE] 结束
+    适合前端逐字显示的聊天场景
+    """
     body = request.get_json(silent=True) or {}
     payload, err = _build_spark_payload(body)
     if err:
@@ -422,6 +472,12 @@ def chat_stream():
 # ------------------------------------------------------------
 @socketio.on("spark_chat")
 def handle_chat(data):
+    """
+    星火大模型 WebSocket 对话事件 spark_chat
+    前端 emit("spark_chat", {messages, model?, ...})
+    后端回推：chat_chunk（每个文本片段）→ chat_done（结束）/ chat_error（异常）
+    适合双向交互场景
+    """
     if not isinstance(data, dict):
         emit("chat_error", {"msg": "请求数据格式错误"})
         return
@@ -452,6 +508,7 @@ def handle_chat(data):
 # ============================================================
 @app.errorhandler(500)
 def internal_error(e):
+    """全局 500 异常处理，返回统一错误响应。"""
     return fail(5000, "服务器内部错误", 500)
 
 

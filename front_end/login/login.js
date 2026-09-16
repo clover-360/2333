@@ -85,18 +85,6 @@ passwordInput.addEventListener('input', () => {
   if (passwordInput.classList.contains('error')) clearError(passwordInput, passwordError);
 });
 
-// ============ 带 token 的请求工具 ============
-function authFetch(url, options = {}) {
-  const token = localStorage.getItem('token');
-  const headers = Object.assign({}, options.headers || {});
-  if (token) headers['Authorization'] = 'Bearer ' + token;
-  if (options.body && typeof options.body === 'object') {
-    headers['Content-Type'] = 'application/json';
-    options.body = JSON.stringify(options.body);
-  }
-  return fetch(API_BASE + url, Object.assign({}, options, { headers }));
-}
-
 // ============ 表单提交处理 ============
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
