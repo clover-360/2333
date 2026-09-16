@@ -403,6 +403,7 @@ def chat_stream():
                 stream=True,
                 timeout=Config.SPARK_TIMEOUT,
             )
+            resp.encoding = 'utf-8'          # ← 新增这一行
             # 逐行转发星火的 SSE 流（每行形如 data: {...}）
             for line in resp.iter_lines(decode_unicode=True):
                 if line:
@@ -437,6 +438,7 @@ def handle_chat(data):
             stream=True,
             timeout=Config.SPARK_TIMEOUT,
         )
+        resp.encoding = 'utf-8'          # ← 新增这一行
         for line in resp.iter_lines(decode_unicode=True):
             if line:
                 emit("chat_chunk", line)
