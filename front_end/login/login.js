@@ -122,7 +122,7 @@ loginForm.addEventListener('submit', async (event) => {
         username: result.data.username,
       }));
       showToast('登录成功！欢迎回来 🌟', 'success');
-      setTimeout(() => { window.location.href = '/dialog/chat-stream.html'; }, 800);
+      setTimeout(() => { window.location.href = '../dialog/chat-stream.html'; }, 800);
     } else {
       showToast(result.msg || '登录失败，请重试');
       passwordInput.value = '';
